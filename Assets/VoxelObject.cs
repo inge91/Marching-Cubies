@@ -1,10 +1,12 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using AssemblyCSharp;
 
 
 public class VoxelObject : MonoBehaviour {
 	
 	public int size = 8;
+	int sizeSQ;
 	public float spacing = 1;
 	private GameObject[,,] voxels;
 	
@@ -13,6 +15,8 @@ public class VoxelObject : MonoBehaviour {
 	public bool marchingCube = false;
 	// Use this for initialization
 	void Start () {
+		
+		Init ();
 		GetComponent<MeshFilter>().mesh = new Mesh();
 		MarchingCube ();
 	}
@@ -50,33 +54,62 @@ public class VoxelObject : MonoBehaviour {
 				}
 			}
 		}
+		Debug.Log (vertices.Count);
 		GetComponent<MeshFilter> ().mesh.RecalculateNormals ();
 		GetComponent<MeshFilter> ().mesh.vertices = vertices.ToArray();
 		GetComponent<MeshFilter> ().mesh.triangles = triangles.ToArray();
+	}
+	WannabeList<int> active;
+	WannabeList<int> nonActive;
+	WannabeList<WannabeList<Vector3>> midPoints;
+	WannabeList<WannabeList<Vector3>> nonActiveMidPoints;
+
+	WannabeList<Vector3> activeNeighbours;
+	void Init()
+	{
+		sizeSQ = size * size;
+		active = new WannabeList<int> (8);
+		nonActive = new WannabeList<int> (8);
+		midPoints = new WannabeList<WannabeList<Vector3>> (8);
+		for (int i = 0; i < midPoints.MaxSize; i++) {
+			midPoints.Add(new WannabeList<Vector3>(3));
+		}
+		nonActiveMidPoints = new WannabeList<WannabeList<Vector3>> (8);
+		for (int i = 0; i < nonActiveMidPoints.MaxSize; i++) {
+			nonActiveMidPoints.Add(new WannabeList<Vector3>(3));
+		}
+
+		activeNeighbours = new WannabeList<Vector3> (3);
 	}
 	
 	void DetermineMeshFromCube(Vector3[] objects)
 	{
 		int c = 0;
 		
-		List<int> active = new List<int> ();
-		List<int> nonActive = new List<int> ();
-		List<Vector3[]> midPoints = new List<Vector3[]> ();
-		List<Vector3[]> nonActiveMidPoints = new List<Vector3[]> ();
+
+		midPoints.Clear ();
+		nonActiveMidPoints.Clear ();
+		active.Clear ();
+		nonActive.Clear ();
+
+		float sizeSQ = size * size;
 		for(int i = 0; i < 8 ; i ++)
 		{
-			if (Vector3.Distance(this.transform.position, objects[i]) < size) {
-				active.Add (i);
-				midPoints.Add(GetAvailableMidpoints(i, objects, false));
+			if (Vector3.SqrMagnitude(this.transform.position - objects[i]) < sizeSQ) {
+				active.Add(i);
+				GetAvailableMidpoints(midPoints[midPoints.Count], i, objects, false);
+				midPoints.IncrementIndex();
 			}
 			else{
 				nonActive.Add(i);
-				nonActiveMidPoints.Add(GetAvailableMidpoints(i, objects, true));
+				GetAvailableMidpoints(nonActiveMidPoints[nonActiveMidPoints.Count], i, objects, true);
+				nonActiveMidPoints.IncrementIndex();
 			}
 		}
-		bool pointsAreActive = true;
-		if (active.Count != 8) {
 
+		bool pointsAreActive = true;
+	
+		if (active.Count != 8 && active.Count != 0) {
 			if (active.Count > 4) {
 			
 				pointsAreActive = false;
@@ -87,16 +120,16 @@ public class VoxelObject : MonoBehaviour {
 			if (active.Count == 1) {
 				oneActiveCase (midPoints[0], objects, active[0], pointsAreActive);
 			} else if (active.Count == 2) {
-				twoActiveCase (midPoints, objects, active.ToArray (), pointsAreActive);
+				twoActiveCase (midPoints, objects, active, pointsAreActive);
 			} else if (active.Count == 3) {
-				threeActiveCase (midPoints, objects, active.ToArray (), pointsAreActive);
+				threeActiveCase (midPoints, objects, active, pointsAreActive);
 			} else if (active.Count == 4) {
-				fourActiveCase (midPoints, objects, active.ToArray (), pointsAreActive);
+				fourActiveCase (midPoints, objects, active, pointsAreActive);
 			}
 		}
 	}
 	
-	void oneActiveCase(Vector3[] midPoints, Vector3[] objects, int activeIndex, bool pointsAreActive)
+	void oneActiveCase(WannabeList<Vector3> midPoints, Vector3[] objects, int activeIndex, bool pointsAreActive)
 	{
 		Vector3[] singleTriangle = new Vector3[3];
 		int vertexCount = 0;
@@ -106,14 +139,14 @@ public class VoxelObject : MonoBehaviour {
 		AddTriangles(ref vertexCount, midPoints[2], singleTriangle, activePointLocation, pointsAreActive);
 	}
 	
-	void twoActiveCase(List<Vector3[]> midPoints, Vector3[] objects, int[] activeIndices, bool pointsAreActive)
+	void twoActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
 		Vector3[] singleTriangle = new Vector3[3];
 		int vertexCount = 0;
 		
 		Vector3 activePointLocation = objects[activeIndices[0]];
 		// In case our point has 2 possible midpoints, it is neighbours with the other active voxel.
-		if (midPoints[0].Length == 2) {
+		if (midPoints[0].Count == 2) {
 			AddTriangles(ref vertexCount, midPoints[0][0], singleTriangle, objects[activeIndices[0]], pointsAreActive);
 			AddTriangles(ref vertexCount, midPoints[0][1], singleTriangle, objects[activeIndices[0]], pointsAreActive);
 			AddTriangles(ref vertexCount, midPoints[1][0], singleTriangle, objects[activeIndices[0]], pointsAreActive);
@@ -127,11 +160,11 @@ public class VoxelObject : MonoBehaviour {
 		}
 	}
 	
-	int getIndexOfClosestMidpoint(Vector3 midpoint, Vector3[] midpoints)
+	int getIndexOfClosestMidpoint(Vector3 midpoint, WannabeList<Vector3> midpoints)
 	{
 		float smallestDistance = Vector3.Distance (midpoint, midpoints [0]);
 		int smallestDistanceIndex = 0;
-		for(int i = 1 ; i < midpoints.Length; i ++)
+		for(int i = 1 ; i < midpoints.Count; i ++)
 		{
 			float distance = Vector3.Distance(midpoint, midpoints[i]);
 			if(smallestDistance > distance)
@@ -143,11 +176,11 @@ public class VoxelObject : MonoBehaviour {
 		return smallestDistanceIndex;
 	}
 	
-	int getIndexOfFurthestMidpoint(Vector3 midpoint, Vector3[] midpoints)
+	int getIndexOfFurthestMidpoint(Vector3 midpoint, WannabeList<Vector3> midpoints)
 	{
 		float furthestDistance = Vector3.Distance (midpoint, midpoints [0]);
 		int furthestDistanceIndex = 0;
-		for(int i = 1 ; i < midpoints.Length; i ++)
+		for(int i = 1 ; i < midpoints.Count; i ++)
 		{
 			float distance = Vector3.Distance(midpoint, midpoints[i]);
 			if(furthestDistance < distance)
@@ -159,7 +192,7 @@ public class VoxelObject : MonoBehaviour {
 		return furthestDistanceIndex;
 	}
 	
-	void threeActiveCase(List<Vector3[]> midPoints, Vector3[] objects, int[] activeIndices, bool pointsAreActive)
+	void threeActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
 		Vector3[] singleTriangle = new Vector3[3];
 		int vertexCount = 0;
@@ -177,7 +210,7 @@ public class VoxelObject : MonoBehaviour {
 			int nodeWithOneActiveNeighbour = 0;
 			for(int i = 0; i < 3; i ++)
 			{
-				if(midPoints[i].Length == 1)
+				if(midPoints[i].Count == 1)
 				{
 					nodeWithTwoActiveNeighbours = i;
 				}
@@ -204,11 +237,11 @@ public class VoxelObject : MonoBehaviour {
 		}
 		if (midPointSum == 7) {
 			int activeNoNeighbours = 0;
-			List<Vector3[]> activeNeighbours = new List<Vector3[]>();
-			List<int> activeNeighbourIndices = new List<int>();
+			WannabeList<WannabeList<Vector3>> activeNeighbours = new WannabeList<WannabeList<Vector3>>(2);
+			WannabeList<int> activeNeighbourIndices = new WannabeList<int>(3);
 			for(int i = 0; i < 3; i ++)
 			{
-				if(midPoints[i].Length == 3)
+				if(midPoints[i].Count == 3)
 				{
 					activeNoNeighbours = i;
 				}
@@ -218,7 +251,7 @@ public class VoxelObject : MonoBehaviour {
 				}
 			}
 			oneActiveCase(midPoints[activeNoNeighbours], objects, activeIndices[activeNoNeighbours], pointsAreActive);
-			twoActiveCase(activeNeighbours, objects, activeNeighbourIndices.ToArray(), pointsAreActive);
+			twoActiveCase(activeNeighbours, objects, activeNeighbourIndices, pointsAreActive);
 		}
 	}
 	
@@ -250,7 +283,7 @@ public class VoxelObject : MonoBehaviour {
 	}
 	
 	
-	void fourActiveCase(List<Vector3[]> midPoints, Vector3[] objects, int[] activeIndices, bool pointsAreActive)
+	void fourActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
 		Vector3[] singleTriangle = new Vector3[3];
 		int vertexCount = 0;
@@ -272,7 +305,7 @@ public class VoxelObject : MonoBehaviour {
 			bool firstCase = false;
 			for(int i = 0; i < 4; i ++)
 			{
-				if(midPoints[i].Length == 0)
+				if(midPoints[i].Count == 0)
 				{
 					firstCase = true;
 					break;
@@ -285,7 +318,7 @@ public class VoxelObject : MonoBehaviour {
 				int j = 0; 
 				for(int i = 0; i < 4; i ++)
 				{
-					if(midPoints[i].Length != 0)
+					if(midPoints[i].Count != 0)
 					{
 						available[j] = i;
 						j ++;
@@ -320,7 +353,7 @@ public class VoxelObject : MonoBehaviour {
 				int twoUnactiveNeighboursIndex = 0;
 				for(int i = 0; i < 4; i ++)
 				{
-					if(midPoints[i].Length == 1)
+					if(midPoints[i].Count == 1)
 					{
 						oneUnactiveNeighbour[oneUnactiveNeighbourIndex] = i;
 						oneUnactiveNeighbourIndex++;
@@ -358,7 +391,7 @@ public class VoxelObject : MonoBehaviour {
 			bool isolatedPointCase = false;
 			for(int i = 0; i < 4; i ++)
 			{
-				if(midPoints[i].Length == 3)
+				if(midPoints[i].Count == 3)
 				{
 					isolatedPointCase = true;
 				}
@@ -366,11 +399,11 @@ public class VoxelObject : MonoBehaviour {
 			if(isolatedPointCase)
 			{
 				int activeNoNeighbours = 0;
-				List<Vector3[]> activeNeighbours = new List<Vector3[]>();	
-				List<int> activeNeighbourIndices = new List<int>();
+				WannabeList<WannabeList<Vector3>> activeNeighbours = new WannabeList<WannabeList<Vector3>>(3);	
+				WannabeList<int> activeNeighbourIndices = new WannabeList<int>(3);
 				for(int i = 0; i < 4; i ++)
 				{
-					if(midPoints[i].Length == 3)
+					if(midPoints[i].Count == 3)
 					{
 						activeNoNeighbours = i;
 					}
@@ -381,7 +414,7 @@ public class VoxelObject : MonoBehaviour {
 				}
 				
 				oneActiveCase(midPoints[activeNoNeighbours], objects, activeIndices[activeNoNeighbours], pointsAreActive);
-				threeActiveCase(activeNeighbours, objects, activeNeighbourIndices.ToArray(), pointsAreActive);
+				threeActiveCase(activeNeighbours, objects, activeNeighbourIndices, pointsAreActive);
 			}
 			else{
 				for(int i = 0; i < 4; i ++)
@@ -412,17 +445,17 @@ public class VoxelObject : MonoBehaviour {
 		}
 	}
 	
-	int calculateNumberOfMidpoints(List<Vector3[]> midPoints)
+	int calculateNumberOfMidpoints(WannabeList<WannabeList<Vector3>> midPoints)
 	{
 		int sum = 0;
 		for(int i = 0; i < midPoints.Count; i ++)
 		{
-			sum += midPoints[i].Length;
+			sum += midPoints[i].Count;
 		}
 		return sum;
 	}
 	
-	Vector3[] GetAvailableMidpoints(int i, Vector3[] objects, bool checkForActive)
+	void GetAvailableMidpoints(WannabeList<Vector3> availableNeighbours, int i, Vector3[] objects, bool checkForActive)
 	{
 		int offsetX = -2;
 		int offsetY = -4;
@@ -442,9 +475,9 @@ public class VoxelObject : MonoBehaviour {
 			break;
 		}
 		
-		List<Vector3> activeNeighbours = new List<Vector3>();
+		activeNeighbours.Clear();
 		
-		if(Vector3.Distance(this.transform.position, objects[i + offsetX]) < size == checkForActive)
+		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetX]) < sizeSQ == checkForActive)
 		{
 			if(offsetX > 0)
 			{
@@ -455,7 +488,7 @@ public class VoxelObject : MonoBehaviour {
 				activeNeighbours.Add(objects[i + offsetX] + (0.5f * spacing) * new Vector3(1, 0, 0));
 			}
 		}
-		if(Vector3.Distance(this.transform.position, objects[i + offsetY]) < size == checkForActive)
+		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetY]) < sizeSQ == checkForActive)
 		{
 			if(offsetY > 0)
 			{
@@ -466,7 +499,7 @@ public class VoxelObject : MonoBehaviour {
 				activeNeighbours.Add(objects[i + offsetY] + (0.5f * spacing) * new Vector3(0, 1, 0));
 			}
 		}
-		if(Vector3.Distance(this.transform.position, objects[i + offsetZ]) < size == checkForActive)
+		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetZ]) < sizeSQ == checkForActive)
 		{
 			if(offsetZ > 0)
 			{
@@ -477,8 +510,6 @@ public class VoxelObject : MonoBehaviour {
 				activeNeighbours.Add(objects[i + offsetZ] + (0.5f * spacing) * new Vector3(0, 0, 1));
 			}
 		}
-		
-		return activeNeighbours.ToArray();
 	}
 	
 	
