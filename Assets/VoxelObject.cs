@@ -5,13 +5,15 @@ using AssemblyCSharp;
 
 public class VoxelObject : MonoBehaviour {
 	
-	public int size = 8;
-	int sizeSQ;
+	public float size = 1.5f;
+	float sizeSQ;
 	public float spacing = 1;
 	private GameObject[,,] voxels;
 	
 	public List<Vector3> vertices;
 	public List<int> triangles;
+	public List<Vector3> allActives;
+	public List<Vector3> allNonActives;
 	public bool marchingCube = false;
 	// Use this for initialization
 	void Start () {
@@ -23,21 +25,26 @@ public class VoxelObject : MonoBehaviour {
 
 	// Update is called once per frame
 	void Update () {
-		if(marchingCube)
-		{
-			MarchingCube();
-		}
+		MarchingCube();
 	}
 	
 	void MarchingCube()
 	{
+		allActives.Clear ();
+		allNonActives.Clear();
 		vertices.Clear ();
 		triangles.Clear ();
 		Vector3 position = this.transform.position;
 		GetComponent<MeshFilter> ().mesh.Clear ();
-		for (float x = Mathf.FloorToInt(position.x) - 4 - size; x <  Mathf.FloorToInt(position.x) + size + 4; x += spacing) {
-			for (float y = Mathf.FloorToInt(position.y) - 4 - size; y <  Mathf.FloorToInt(position.y) + size + 4; y += spacing) {
-				for (float z = Mathf.FloorToInt(position.z) - 4 - size; z <  Mathf.FloorToInt(position.z) + size + 4; z += spacing) {
+		float xMin = Mathf.FloorToInt (position.x) - size - 1;
+		float xMax = Mathf.FloorToInt (position.x) + size + 1;
+		float yMin = Mathf.FloorToInt (position.y) - size - 1;
+		float yMax = Mathf.FloorToInt (position.y) + size + 1;
+		float zMin = Mathf.FloorToInt (position.z) - size - 1;
+		float zMax = Mathf.FloorToInt (position.z) + size + 1;
+		for (float x = xMin; x < xMax ; x += spacing) {
+			for (float y = yMin; y < yMax; y += spacing) {
+				for (float z = zMin; z < zMax; z += spacing) {
 					Vector3[] cubeVoxels = new Vector3[8];
 					cubeVoxels[0] = new Vector3(x, y, z);
 					cubeVoxels[1] = new Vector3(x, y, z + spacing); 
@@ -54,7 +61,7 @@ public class VoxelObject : MonoBehaviour {
 				}
 			}
 		}
-		Debug.Log (vertices.Count);
+	
 		GetComponent<MeshFilter> ().mesh.RecalculateNormals ();
 		GetComponent<MeshFilter> ().mesh.vertices = vertices.ToArray();
 		GetComponent<MeshFilter> ().mesh.triangles = triangles.ToArray();
@@ -83,24 +90,25 @@ public class VoxelObject : MonoBehaviour {
 	}
 	
 	void DetermineMeshFromCube(Vector3[] objects)
-	{
-		int c = 0;
-		
+	{	
 
+		int c = 0;
 		midPoints.Clear ();
 		nonActiveMidPoints.Clear ();
 		active.Clear ();
-		nonActive.Clear ();
-
-		float sizeSQ = size * size;
+		nonActive.Clear ();                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+	
 		for(int i = 0; i < 8 ; i ++)
 		{
+
 			if (Vector3.SqrMagnitude(this.transform.position - objects[i]) < sizeSQ) {
+				allActives.Add(objects[i]);
 				active.Add(i);
 				GetAvailableMidpoints(midPoints[midPoints.Count], i, objects, false);
 				midPoints.IncrementIndex();
 			}
 			else{
+				allNonActives.Add(objects[i]);
 				nonActive.Add(i);
 				GetAvailableMidpoints(nonActiveMidPoints[nonActiveMidPoints.Count], i, objects, true);
 				nonActiveMidPoints.IncrementIndex();
@@ -108,15 +116,14 @@ public class VoxelObject : MonoBehaviour {
 		}
 
 		bool pointsAreActive = true;
-	
 		if (active.Count != 8 && active.Count != 0) {
+
 			if (active.Count > 4) {
 			
 				pointsAreActive = false;
 				active = nonActive;
 				midPoints = nonActiveMidPoints;
 			}
-		
 			if (active.Count == 1) {
 				oneActiveCase (midPoints[0], objects, active[0], pointsAreActive);
 			} else if (active.Count == 2) {
@@ -475,39 +482,38 @@ public class VoxelObject : MonoBehaviour {
 			break;
 		}
 		
-		activeNeighbours.Clear();
-		
+		availableNeighbours.Clear();
 		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetX]) < sizeSQ == checkForActive)
 		{
 			if(offsetX > 0)
 			{
-				activeNeighbours.Add(objects[i + offsetX] - (0.5f * spacing) * new Vector3(1, 0, 0));
+				availableNeighbours.Add(objects[i + offsetX] - (0.5f * spacing) * new Vector3(1, 0, 0));
 			}
 			else
 			{
-				activeNeighbours.Add(objects[i + offsetX] + (0.5f * spacing) * new Vector3(1, 0, 0));
+				availableNeighbours.Add(objects[i + offsetX] + (0.5f * spacing) * new Vector3(1, 0, 0));
 			}
 		}
 		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetY]) < sizeSQ == checkForActive)
 		{
 			if(offsetY > 0)
 			{
-				activeNeighbours.Add(objects[i + offsetY] - (0.5f * spacing) * new Vector3(0, 1, 0));
+				availableNeighbours.Add(objects[i + offsetY] - (0.5f * spacing) * new Vector3(0, 1, 0));
 			}
 			else
 			{
-				activeNeighbours.Add(objects[i + offsetY] + (0.5f * spacing) * new Vector3(0, 1, 0));
+				availableNeighbours.Add(objects[i + offsetY] + (0.5f * spacing) * new Vector3(0, 1, 0));
 			}
 		}
 		if(Vector3.SqrMagnitude(this.transform.position- objects[i + offsetZ]) < sizeSQ == checkForActive)
 		{
 			if(offsetZ > 0)
 			{
-				activeNeighbours.Add(objects[i + offsetZ] - (0.5f * spacing) * new Vector3(0, 0, 1));
+				availableNeighbours.Add(objects[i + offsetZ] - (0.5f * spacing) * new Vector3(0, 0, 1));
 			} 
 			else
 			{
-				activeNeighbours.Add(objects[i + offsetZ] + (0.5f * spacing) * new Vector3(0, 0, 1));
+				availableNeighbours.Add(objects[i + offsetZ] + (0.5f * spacing) * new Vector3(0, 0, 1));
 			}
 		}
 	}
@@ -560,6 +566,7 @@ public class VoxelObject : MonoBehaviour {
 	
 	void CreateTriangle(Vector3[] v, Vector3 pointPosition, bool pointsAreActive)
 	{
+
 		int vertexIndex = vertices.Count;
 		vertices.Add (v[0]);
 		vertices.Add (v[1]);
@@ -600,5 +607,20 @@ public class VoxelObject : MonoBehaviour {
 			}
 		}
 	}
-	
+	void OnDrawGizmosSelected () {
+		for(int i = 0; i < allActives.Count; i ++)
+		{
+			Gizmos.color = new Color (1,0,0,.5f);
+			Gizmos.DrawCube (allActives[i], new Vector3 (0.1f,0.1f,0.1f));
+		}
+		for(int i = 0; i < allNonActives.Count; i ++)
+		{
+			Gizmos.color = new Color (0,0,0,.5f);
+			Gizmos.DrawCube (allNonActives[i], new Vector3 (0.1f,0.1f,0.1f));
+		}
+		// Draw a semitransparent blue cube at the transforms position
+
+	}
+
 }
+
