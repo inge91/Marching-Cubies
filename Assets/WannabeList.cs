@@ -12,7 +12,7 @@ namespace AssemblyCSharp
 {
 	public class WannabeList <T>
 	{
-		T[] arr;
+		public T[] arr;
 		int counter;
 		public WannabeList (int maxSize)
 		{
@@ -33,6 +33,7 @@ namespace AssemblyCSharp
 		public int Count
 		{
 			get{ return counter; }
+			set{ counter = value; }
  		}
 
 		public int MaxSize
@@ -47,13 +48,13 @@ namespace AssemblyCSharp
 
 		public void CopyFrom(WannabeList<T> toCopyFrom)
 		{
-			toCopyFrom.arr.CopyTo (arr, 0);
+			arr = toCopyFrom.arr.Clone() as T[];
 			counter = toCopyFrom.counter;
 		}
 
 		public void CopyFrom(T[] toCopyFrom)
 		{
-			toCopyFrom.CopyTo (arr, 0);
+			arr = toCopyFrom.Clone() as T[];
 			counter = toCopyFrom.Length;
 		}
 
@@ -61,7 +62,6 @@ namespace AssemblyCSharp
 		{
 			get{ return arr[index]; }
 		}
-
 	}
 }
 

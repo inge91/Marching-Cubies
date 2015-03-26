@@ -92,7 +92,7 @@ public class VoxelGrid : MonoBehaviour {
 
 	void DetermineMeshFromCube(GameObject[] objects)
 	{
-		int c = 0;
+
 
 		List<int> active = new List<int> ();
 		List<int> nonActive = new List<int> ();
@@ -143,7 +143,6 @@ public class VoxelGrid : MonoBehaviour {
 		Vector3[] singleTriangle = new Vector3[3];
 		int vertexCount = 0;
 
-		Vector3 activePointLocation = objects[activeIndices[0]].transform.localPosition;
 		// In case our point has 2 possible midpoints, it is neighbours with the other active voxel.
 		if (midPoints[0].Length == 2) {
 			AddTriangles(ref vertexCount, midPoints[0][0], singleTriangle, objects[activeIndices[0]].transform.localPosition, pointsAreActive);
