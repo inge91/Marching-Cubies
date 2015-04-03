@@ -10,10 +10,8 @@ public class VoxelObject : MonoBehaviour {
 	public float spacing = 1;
 	private GameObject[,,] voxels;
 	
-	public List<Vector3> vertices;
+	public WannabeList<Vector3> vertices;
 	public List<int> triangles;
-	public List<Vector3> allActives;
-	public List<Vector3> allNonActives;
 	public bool marchingCube = false;
 
 	public Material objectMaterial;
@@ -35,10 +33,10 @@ public class VoxelObject : MonoBehaviour {
 		
 	}
 	Vector3[] cubeVoxels = new Vector3[8];
+
+	int currentNumberOfTriangles = 0;
 	void MarchingCube()
 	{
-		allActives.Clear ();
-		allNonActives.Clear();
 		vertices.Clear ();
 		triangles.Clear ();
 		Vector3 position = this.transform.position;
@@ -67,37 +65,34 @@ public class VoxelObject : MonoBehaviour {
 			}
 		}
 		Mesh mesh = meshObject.GetComponent<MeshFilter> ().mesh;
-		if(mesh.triangles.Length < triangles.Count)
+
+		if(currentNumberOfTriangles < triangles.Count)
 		{
-			mesh.vertices = vertices.ToArray();
+			mesh.vertices = vertices.arr;
 			mesh.triangles = triangles.ToArray();
 		}
 		else{
 			mesh.triangles = triangles.ToArray();
-			mesh.vertices = vertices.ToArray();
+			mesh.vertices = vertices.arr;
 		}
-
+		currentNumberOfTriangles = triangles.Count;
 		mesh.RecalculateBounds ();
 		mesh.RecalculateNormals ();
 	}
 	WannabeList<int> active;
 	WannabeList<int> nonActive;
 	WannabeList<WannabeList<Vector3>> midPoints;
-	WannabeList<WannabeList<Vector3>> nonActiveMidPoints;
 
 	WannabeList<Vector3> activeNeighbours;
 	void Init()
 	{
 		sizeSQ = size * size;
+		vertices = new WannabeList<Vector3> (65000);
 		active = new WannabeList<int> (8);
 		nonActive = new WannabeList<int> (8);
 		midPoints = new WannabeList<WannabeList<Vector3>> (8);
 		for (int i = 0; i < midPoints.MaxSize; i++) {
 			midPoints.Add(new WannabeList<Vector3>(3));
-		}
-		nonActiveMidPoints = new WannabeList<WannabeList<Vector3>> (8);
-		for (int i = 0; i < nonActiveMidPoints.MaxSize; i++) {
-			nonActiveMidPoints.Add(new WannabeList<Vector3>(3));
 		}
 
 		activeNeighbours = new WannabeList<Vector3> (3);
@@ -108,7 +103,6 @@ public class VoxelObject : MonoBehaviour {
 
 		int c = 0;
 		midPoints.Clear ();
-		nonActiveMidPoints.Clear ();
 
 		active.Clear ();
 		nonActive.Clear ();    
@@ -116,37 +110,35 @@ public class VoxelObject : MonoBehaviour {
 		for(int i = 0; i < 8 ; i ++)
 		{
 			if (Vector3.SqrMagnitude(this.transform.position - objects[i]) < sizeSQ) {
-				allActives.Add(objects[i]);
 				active.Add(i);
-				GetAvailableMidpoints(midPoints[midPoints.Count], i, objects, false);
-				midPoints.IncrementIndex();
 			}
 			else{
-				allNonActives.Add(objects[i]);
 				nonActive.Add(i);
-				GetAvailableMidpoints(nonActiveMidPoints[nonActiveMidPoints.Count], i, objects, true);
-				nonActiveMidPoints.IncrementIndex();
 			}
 		}
 
 		bool pointsAreActive = true;
 		if (active.Count != 8 && active.Count != 0) {
-
+			// In case there are more points acitve than non active, 
+			// the cases are handled in an inverted way.
 			if (active.Count > 4) {
 				pointsAreActive = false;
 				active.CopyFrom(nonActive);
-				for(int i = 0; i < 8 ; i ++)
+				for(int i = 0; i < active.Count; i ++)
 				{
-					for(int j = 0; j < 3; j ++)
-					{
-						Vector3 v = nonActiveMidPoints.arr[i].arr[j];
-						midPoints.arr[i].arr[j] = new Vector3(v.x, v.y, v.z);
-						midPoints.arr[i].Count = nonActiveMidPoints.arr[i].Count;
-					}
+					GetAvailableMidpoints(midPoints[midPoints.Count], active[i], objects, true);
+					midPoints.IncrementIndex();
 				}
-				midPoints.Count = nonActiveMidPoints.Count;
-				//midPoints.arr[0].arr[0] = new Vector3(99, 99, 99);
 			}
+			else
+			{
+				for(int i = 0; i < active.Count; i ++)
+				{
+					GetAvailableMidpoints(midPoints[midPoints.Count], active[i], objects, false);
+					midPoints.IncrementIndex();
+				}
+			}
+
 			if (active.Count == 1) {
 				oneActiveCase (midPoints[0], objects, active[0], pointsAreActive);
 			} else if (active.Count == 2) {
@@ -158,31 +150,31 @@ public class VoxelObject : MonoBehaviour {
 			}
 		}
 	}
+	Vector3[] singleTriangle = new Vector3[3];
+	int vertexCount = 0;
 	
 	void oneActiveCase(WannabeList<Vector3> midPoints, Vector3[] objects, int activeIndex, bool pointsAreActive)
 	{
-		Vector3[] singleTriangle = new Vector3[3];
-		int vertexCount = 0;
-		Vector3 activePointLocation = objects[activeIndex];
-		AddTriangles(ref vertexCount, midPoints[0], singleTriangle, activePointLocation, pointsAreActive);
-		AddTriangles(ref vertexCount, midPoints[1], singleTriangle, activePointLocation, pointsAreActive);
-		AddTriangles(ref vertexCount, midPoints[2], singleTriangle, activePointLocation, pointsAreActive);
+
+		vertexCount = 0;
+		AddTriangles(midPoints[0], objects[activeIndex], pointsAreActive);
+		AddTriangles(midPoints[1], objects[activeIndex], pointsAreActive);
+		AddTriangles(midPoints[2], objects[activeIndex], pointsAreActive);
 	}
 	
 	void twoActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
-		Vector3[] singleTriangle = new Vector3[3];
-		int vertexCount = 0;
+		vertexCount = 0;
 		
 		Vector3 activePointLocation = objects[activeIndices[0]];
 		// In case our point has 2 possible midpoints, it is neighbours with the other active voxel.
 		if (midPoints[0].Count == 2) {
-			AddTriangles(ref vertexCount, midPoints[0][0], singleTriangle, objects[activeIndices[0]], pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[0][1], singleTriangle, objects[activeIndices[0]], pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[1][0], singleTriangle, objects[activeIndices[0]], pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[1][0], singleTriangle, objects[activeIndices[0]], pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[1][1], singleTriangle, objects[activeIndices[0]], pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[0][1], singleTriangle, objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[0][0], objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[0][1], objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[1][0], objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[1][0], objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[1][1], objects[activeIndices[0]], pointsAreActive);
+			AddTriangles(midPoints[0][1], objects[activeIndices[0]], pointsAreActive);
 			
 		} else {
 			oneActiveCase (midPoints[0], objects, activeIndices[0], pointsAreActive);
@@ -224,8 +216,7 @@ public class VoxelObject : MonoBehaviour {
 	
 	void threeActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
-		Vector3[] singleTriangle = new Vector3[3];
-		int vertexCount = 0;
+		vertexCount = 0;
 		
 		
 		int midPointSum = calculateNumberOfMidpoints(midPoints);
@@ -253,17 +244,17 @@ public class VoxelObject : MonoBehaviour {
 			int closestIndex1 = getIndexOfClosestMidpoint(midPoints[nodeWithTwoActiveNeighbours][0], midPoints[nodeWithOneActiveNeighbour]);
 			int closestIndex2 = getIndexOfClosestMidpoint(midPoints[nodeWithTwoActiveNeighbours][0], midPoints[nodeWithOneActiveNeighbour2]);
 			
-			AddTriangles(ref vertexCount, midPoints[nodeWithTwoActiveNeighbours][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour][closestIndex1], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour2][closestIndex2], singleTriangle, activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithTwoActiveNeighbours][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour][closestIndex1], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour2][closestIndex2], activePointLocation, pointsAreActive);
 			
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour][closestIndex1], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour2][closestIndex2], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour][1 - closestIndex1], singleTriangle, activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour][closestIndex1], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour2][closestIndex2], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour][1 - closestIndex1], activePointLocation, pointsAreActive);
 			
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour][1 - closestIndex1], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour2][1-closestIndex2], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[nodeWithOneActiveNeighbour2][closestIndex2], singleTriangle, activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour][1 - closestIndex1], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour2][1-closestIndex2], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[nodeWithOneActiveNeighbour2][closestIndex2], activePointLocation, pointsAreActive);
 		}
 		if (midPointSum == 7) {
 			int activeNoNeighbours = 0;
@@ -315,20 +306,20 @@ public class VoxelObject : MonoBehaviour {
 	
 	void fourActiveCase(WannabeList<WannabeList<Vector3>> midPoints, Vector3[] objects, WannabeList<int> activeIndices, bool pointsAreActive)
 	{
-		Vector3[] singleTriangle = new Vector3[3];
-		int vertexCount = 0;
+	
+		vertexCount = 0;
 		
 		int midPointSum = calculateNumberOfMidpoints(midPoints);
 		
 		// All vertices are on the same side of the cube
 		if (midPointSum == 4) {
 			Vector3 activePointLocation = objects[activeIndices[0]];
-			AddTriangles(ref vertexCount, midPoints[0][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[1][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[2][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[2][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[3][0], singleTriangle, activePointLocation, pointsAreActive);
-			AddTriangles(ref vertexCount, midPoints[1][0], singleTriangle, activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[0][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[1][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[2][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[2][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[3][0], activePointLocation, pointsAreActive);
+			AddTriangles(midPoints[1][0], activePointLocation, pointsAreActive);
 		}
 		if (midPointSum == 6) {
 			
@@ -357,23 +348,23 @@ public class VoxelObject : MonoBehaviour {
 				Vector3 activePointLocation = objects[activeIndices[0]];
 				int index = getIndexOfClosestMidpoint(midPoints[available[0]][0], midPoints[available[1]]);
 				
-				AddTriangles(ref vertexCount, midPoints[available[0]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[0]][1], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[1]][index], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[0]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[0]][1], activePointLocation, pointsAreActive);
+				AddTriangles( midPoints[available[1]][index], activePointLocation, pointsAreActive);
 				
 				int index2 = getIndexOfFurthestMidpoint(midPoints[available[1]][0], midPoints[available[0]]);
-				AddTriangles(ref vertexCount, midPoints[available[1]][index], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[1]][1 - index], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[0]][index2], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[1]][index], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[1]][1 - index], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[0]][index2], activePointLocation, pointsAreActive);
 				
 				index2 = getIndexOfClosestMidpoint(midPoints[available[0]][index2], midPoints[available[2]]);
-				AddTriangles(ref vertexCount, midPoints[available[1]][1 - index], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[0]][index2], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[2]][index2], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[1]][1 - index], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[0]][index2], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[2]][index2], activePointLocation, pointsAreActive);
 				
-				AddTriangles(ref vertexCount, midPoints[available[2]][1], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[2]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[available[1]][1 - index], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[2]][1], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[2]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[available[1]][1 - index], activePointLocation, pointsAreActive);
 				
 			}
 			else{
@@ -397,24 +388,24 @@ public class VoxelObject : MonoBehaviour {
 				int index2 = getIndexOfFurthestMidpoint(midPoints[oneUnactiveNeighbour[1]][0], midPoints[twoUnactiveNeighbours[1]]);
 				
 				Vector3 activePointLocation = objects[activeIndices[oneUnactiveNeighbour[1]]];
-				AddTriangles(ref vertexCount, midPoints[oneUnactiveNeighbour[1]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[0]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[0]][1], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[oneUnactiveNeighbour[1]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[0]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[0]][1], activePointLocation, pointsAreActive);
 				
 				activePointLocation = objects[activeIndices[oneUnactiveNeighbour[1]]];
-				AddTriangles(ref vertexCount, midPoints[oneUnactiveNeighbour[1]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[1]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[1]][1], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[oneUnactiveNeighbour[1]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[1]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[1]][1], activePointLocation, pointsAreActive);
 				
 				activePointLocation = objects[activeIndices[oneUnactiveNeighbour[1]]];
-				AddTriangles(ref vertexCount, midPoints[oneUnactiveNeighbour[1]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[0]][index1], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[1]][index2], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[oneUnactiveNeighbour[1]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[0]][index1], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[1]][index2], activePointLocation, pointsAreActive);
 				
 				activePointLocation = objects[activeIndices[oneUnactiveNeighbour[0]]];
-				AddTriangles(ref vertexCount, midPoints[oneUnactiveNeighbour[0]][0], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[0]][index1], singleTriangle, activePointLocation, pointsAreActive);
-				AddTriangles(ref vertexCount, midPoints[twoUnactiveNeighbours[1]][index2], singleTriangle, activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[oneUnactiveNeighbour[0]][0], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[0]][index1], activePointLocation, pointsAreActive);
+				AddTriangles(midPoints[twoUnactiveNeighbours[1]][index2], activePointLocation, pointsAreActive);
 			}
 		}
 		if (midPointSum == 8) {
@@ -454,13 +445,13 @@ public class VoxelObject : MonoBehaviour {
 						if(areNeighbouringPositions(activeIndices[i], activeIndices[j]))
 						{
 							Vector3 activePointLocation = objects[activeIndices[i]];
-							AddTriangles(ref vertexCount, midPoints[i][0], singleTriangle, activePointLocation, pointsAreActive);
-							AddTriangles(ref vertexCount, midPoints[i][1], singleTriangle, activePointLocation, pointsAreActive);
-							AddTriangles(ref vertexCount, midPoints[j][0], singleTriangle, activePointLocation, pointsAreActive);
+							AddTriangles(midPoints[i][0], activePointLocation, pointsAreActive);
+							AddTriangles(midPoints[i][1], activePointLocation, pointsAreActive);
+							AddTriangles(midPoints[j][0], activePointLocation, pointsAreActive);
 							
-							AddTriangles(ref vertexCount, midPoints[j][0], singleTriangle, activePointLocation, pointsAreActive);
-							AddTriangles(ref vertexCount, midPoints[j][1], singleTriangle, activePointLocation, pointsAreActive);
-							AddTriangles(ref vertexCount, midPoints[i][1], singleTriangle, activePointLocation, pointsAreActive);
+							AddTriangles( midPoints[j][0], activePointLocation, pointsAreActive);
+							AddTriangles(midPoints[j][1], activePointLocation, pointsAreActive);
+							AddTriangles(midPoints[i][1], activePointLocation, pointsAreActive);
 						}
 					}
 				}
@@ -484,7 +475,8 @@ public class VoxelObject : MonoBehaviour {
 		}
 		return sum;
 	}
-	
+
+	// GetAvailableMidpoints should not be called at the point it is called right now.
 	void GetAvailableMidpoints(WannabeList<Vector3> availableNeighbours, int i, Vector3[] objects, bool checkForActive)
 	{
 		int offsetX = -2;
@@ -542,7 +534,7 @@ public class VoxelObject : MonoBehaviour {
 	}
 	
 	
-	public void AddTriangles(ref int vertexCount, Vector3 vertexPos, Vector3[] singleTriangle, Vector3 activePoint, bool pointsAreActive)
+	public void AddTriangles(Vector3 vertexPos, Vector3 activePoint, bool pointsAreActive)
 	{
 		singleTriangle[vertexCount] = vertexPos;
 		
@@ -603,11 +595,10 @@ public class VoxelObject : MonoBehaviour {
 
 	void CreateTriangle(Vector3[] v, Vector3 pointPosition, bool pointsAreActive)
 	{
-	
-		int[] indices = new int[3];
-		indices[0] = addVertexAndGetIndex(v[0]);
-		indices[1] = addVertexAndGetIndex(v[1]);
-		indices[2] = addVertexAndGetIndex(v[2]);
+		int vertexIndex = vertices.Count;
+		vertices.Add (v[0]);
+		vertices.Add (v[1]);
+		vertices.Add (v[2]);
 		
 		int minI = indexMinX(v);
 		int maxI = indexMaxX(v);
@@ -619,29 +610,28 @@ public class VoxelObject : MonoBehaviour {
 		Vector3 normal = Vector3.Normalize(Vector3.Cross (v [minI] - v[maxI], v [maxI] - v[3 - minI - maxI]));
 		Vector3 w = - (v[0] - pointPosition);
 		float distance = Vector3.Dot (normal, w);
-
-
+		
 		if (pointsAreActive) {
 			if (distance > 0) {
-				triangles.Add (indices[maxI]);	
-				triangles.Add (indices[minI]);	
-				triangles.Add (indices[3 - maxI - minI]);
+				triangles.Add (vertexIndex + maxI);	
+				triangles.Add (vertexIndex + minI);	
+				triangles.Add (vertexIndex + 3 - maxI - minI);
 				
 			} else {
-				triangles.Add (indices[minI]);	
-				triangles.Add (indices[maxI]);	
-				triangles.Add (indices[3 - maxI - minI]);
+				triangles.Add (vertexIndex + minI);	
+				triangles.Add (vertexIndex + maxI);	
+				triangles.Add (vertexIndex + 3 - maxI - minI);
 			}
 		} else {
 			if (distance > 0) {
-				triangles.Add (indices[minI]);	
-				triangles.Add (indices[maxI]);	
-				triangles.Add (indices[3 - maxI - minI]);
+				triangles.Add (vertexIndex + minI);	
+				triangles.Add (vertexIndex + maxI);	
+				triangles.Add (vertexIndex + 3 - maxI - minI);
 				
 			} else {
-				triangles.Add (indices[maxI]);	
-				triangles.Add (indices[minI]);	
-				triangles.Add (indices[3 - maxI - minI]);
+				triangles.Add (vertexIndex + maxI);	
+				triangles.Add (vertexIndex + minI);	
+				triangles.Add (vertexIndex + 3 - maxI - minI);
 			}
 		}
 	}

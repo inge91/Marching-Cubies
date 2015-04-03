@@ -33,7 +33,6 @@ namespace AssemblyCSharp
 		public int Count
 		{
 			get{ return counter; }
-			set{ counter = value; }
  		}
 
 		public int MaxSize
