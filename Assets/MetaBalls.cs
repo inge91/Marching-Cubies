@@ -99,13 +99,21 @@ public class MetaBalls : MonoBehaviour {
 	}
 
 
-	bool cellIsOn(Vector3 cellPos)
-	{
+	float threshold = 1f;
+	float calculateCellValue(Vector3 cellPos)
+	{	
 		float total = 0;
 		for (int i = 0; i < metaBalls.Length; i++) {
 			total += sizeSQ / Vector3.SqrMagnitude(metaBalls[i].transform.position - cellPos);
 		}
-		if (total > 5) {
+		return total;
+	}
+
+
+	bool cellIsOn(Vector3 cellPos)
+	{
+		float value = calculateCellValue(cellPos);
+		if (value > threshold) {
 			return true;
 		}
 		return false;
@@ -153,11 +161,11 @@ public class MetaBalls : MonoBehaviour {
 			}
 
 			if (active.Count == 1) {
-				oneActiveCase (midPoints[0], objects, active[0], pointsAreActive);
+				//oneActiveCase (midPoints[0], objects, active[0], pointsAreActive);
 			} else if (active.Count == 2) {
-				twoActiveCase (midPoints, objects, active, pointsAreActive);
+				//twoActiveCase (midPoints, objects, active, pointsAreActive);
 			} else if (active.Count == 3) {
-				threeActiveCase (midPoints, objects, active, pointsAreActive);
+				//threeActiveCase (midPoints, objects, active, pointsAreActive);
 			} else if (active.Count == 4) {
 				fourActiveCase (midPoints, objects, active, pointsAreActive);
 			}
@@ -325,7 +333,7 @@ public class MetaBalls : MonoBehaviour {
 		int midPointSum = calculateNumberOfMidpoints(midPoints);
 		
 		// All vertices are on the same side of the cube
-		if (midPointSum == 4) {
+	/*	if (midPointSum == 4) {
 			Vector3 activePointLocation = objects[activeIndices[0]];
 			AddTriangles(midPoints[0][0], activePointLocation, pointsAreActive);
 			AddTriangles(midPoints[1][0], activePointLocation, pointsAreActive);
@@ -333,7 +341,7 @@ public class MetaBalls : MonoBehaviour {
 			AddTriangles(midPoints[2][0], activePointLocation, pointsAreActive);
 			AddTriangles(midPoints[3][0], activePointLocation, pointsAreActive);
 			AddTriangles(midPoints[1][0], activePointLocation, pointsAreActive);
-		}
+		}*/
 		if (midPointSum == 6) {
 			
 			bool firstCase = false;
@@ -345,7 +353,7 @@ public class MetaBalls : MonoBehaviour {
 					break;
 				}
 			}
-			
+
 			if(firstCase)
 			{
 				int[] available = new int[3];
@@ -420,7 +428,7 @@ public class MetaBalls : MonoBehaviour {
 				AddTriangles(midPoints[twoUnactiveNeighbours[0]][index1], activePointLocation, pointsAreActive);
 				AddTriangles(midPoints[twoUnactiveNeighbours[1]][index2], activePointLocation, pointsAreActive);
 			}
-		}
+		}/*
 		if (midPointSum == 8) {
 			bool isolatedPointCase = false;
 			for(int i = 0; i < 4; i ++)
@@ -476,7 +484,7 @@ public class MetaBalls : MonoBehaviour {
 			{
 				oneActiveCase(midPoints[i], objects, activeIndices[i], pointsAreActive);
 			}
-		}
+		}*/
 	}
 	
 	int calculateNumberOfMidpoints(WannabeList<WannabeList<Vector3>> midPoints)
@@ -513,35 +521,47 @@ public class MetaBalls : MonoBehaviour {
 		availableNeighbours.Clear();
 		if(cellIsOn(objects[i + offsetX]) == checkForActive)
 		{
+			float v = calculateCellValue(objects[i]);
+			float g = calculateCellValue(objects[i + offsetX]);
+			float range = (threshold - v) / (g-v);
+			range = 1 - range;
 			if(offsetX > 0)
 			{
-				availableNeighbours.Add(objects[i + offsetX] - (0.5f * spacing) * new Vector3(1, 0, 0));
+				availableNeighbours.Add(objects[i + offsetX] - (range * spacing) * new Vector3(1, 0, 0));
 			}
 			else
 			{
-				availableNeighbours.Add(objects[i + offsetX] + (0.5f * spacing) * new Vector3(1, 0, 0));
+				availableNeighbours.Add(objects[i + offsetX] + (range * spacing) * new Vector3(1, 0, 0));
 			}
 		}
 		if(cellIsOn(objects[i + offsetY]) == checkForActive)
 		{
+			float v = calculateCellValue(objects[i]);
+			float g = calculateCellValue(objects[i + offsetY]);
+			float range = (threshold - v) / (g-v);
+			range = 1 - range;
 			if(offsetY > 0)
 			{
-				availableNeighbours.Add(objects[i + offsetY] - (0.5f * spacing) * new Vector3(0, 1, 0));
+				availableNeighbours.Add(objects[i + offsetY] - (range * spacing) * new Vector3(0, 1, 0));
 			}
 			else
 			{
-				availableNeighbours.Add(objects[i + offsetY] + (0.5f * spacing) * new Vector3(0, 1, 0));
+				availableNeighbours.Add(objects[i + offsetY] + (range * spacing) * new Vector3(0, 1, 0));
 			}
 		}
 		if(cellIsOn(objects[i + offsetZ]) == checkForActive)
 		{
+			float v = calculateCellValue(objects[i]);
+			float g = calculateCellValue(objects[i + offsetZ]);
+			float range = (threshold - v) / (g-v);
+			range = 1 - range;
 			if(offsetZ > 0)
 			{
-				availableNeighbours.Add(objects[i + offsetZ] - (0.5f * spacing) * new Vector3(0, 0, 1));
+				availableNeighbours.Add(objects[i + offsetZ] - (range * spacing) * new Vector3(0, 0, 1));
 			} 
 			else
 			{
-				availableNeighbours.Add(objects[i + offsetZ] + (0.5f * spacing) * new Vector3(0, 0, 1));
+				availableNeighbours.Add(objects[i + offsetZ] + (range * spacing) * new Vector3(0, 0, 1));
 			}
 		}
 	}
